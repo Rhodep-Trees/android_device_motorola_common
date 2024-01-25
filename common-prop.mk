@@ -52,8 +52,8 @@ PRODUCT_PRODUCT_OVERRIDES += \
 
 # Camera
 PRODUCT_PROPERTY_OVERRIDES += \
-    persist.vendor.camera.expose.aux=1
-
+    persist.vendor.camera.expose.aux=1 \
+   persist.camera.eis.enable=0
 # Dalvik
 PRODUCT_PROPERTY_OVERRIDES += \
     dalvik.vm.heapstartsize=8m \
