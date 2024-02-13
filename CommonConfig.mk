@@ -15,6 +15,17 @@
 # Common path
 COMMON_PATH := device/motorola/common
 
+# Hardware
+## Mediatek
+ifeq ($(PRODUCT_USES_MTK_HARDWARE),true)
+  include $(COMMON_PATH)/hardware/mediatek/board.mk
+endif
+
+## QCOM
+ifeq ($(PRODUCT_USES_QCOM_HARDWARE),true)
+  include $(COMMON_PATH)/hardware/qcom/board.mk
+endif
+
 # Fixes
 BUILD_BROKEN_ELF_PREBUILT_PRODUCT_COPY_FILES := true
 
@@ -63,23 +74,19 @@ TARGET_USERIMAGES_USE_EXT4 := true
 TARGET_USERIMAGES_USE_F2FS := true
 
 # Kernel
+BOARD_KERNEL_IMAGE_NAME := $(TARGET_KERNEL_IMAGE_NAME)
 BOARD_FLASH_BLOCK_SIZE ?= 131072
-BOARD_KERNEL_IMAGE_NAME ?= Image.gz-dtb
 ifneq ($(BOARD_USES_DTBO),false)
   BOARD_DTBOIMG_PARTITION_SIZE ?= 25165824
   BOARD_KERNEL_SEPARATED_DTBO := true
-  ifneq ($(TARGET_PREBUILT_KERNEL),)
-    BOARD_PREBUILT_DTBIMAGE_DIR ?= device/motorola/$(PRODUCT_DEVICE)-kernel/dtbs
-    BOARD_PREBUILT_DTBOIMAGE ?= device/motorola/$(PRODUCT_DEVICE)-kernel/dtbo.img
-  endif
+  BOARD_INCLUDE_RECOVERY_DTBO := true
 endif
 
 ## Common cmdline parameters
 BOARD_KERNEL_CMDLINE += \
-    androidboot.console=ttyMSM0 androidboot.hardware=qcom \
-    androidboot.memcg=1 group.memory=nokmem,nosocket \
-    loop.max_part=7 service_locator.enable=1 swiotlb=0 \
-    cgroup_disable=pressure
+    cgroup_disable=pressure loop.max_part=7 swiotlb=0 \
+    cgroup.memory=nokmem,nosocket
+
 ifneq ($(BOARD_USE_ENFORCING_SELINUX),true)
   BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive
 endif
@@ -89,35 +96,44 @@ ifneq (,$(filter eng, $(TARGET_BUILD_VARIANT)))
   BOARD_KERNEL_CMDLINE += loglevel=7 log_buf_len=7m
 endif
 
-### Kernel Modules
-ifneq ($(TARGET_PREBUILT_KERNEL),)
-  BOARD_VENDOR_KERNEL_MODULES ?= \
-      $(wildcard device/motorola/$(PRODUCT_DEVICE)-kernel/modules/*.ko)
+## Move to bootconfig if required
+ifneq (,$(filter bootconfig,$(BOARD_KERNEL_CMDLINE)))
+  $(foreach config,$(BOARD_KERNEL_CMDLINE), \
+    $(if $(findstring androidboot,$(config)), \
+      $(eval BOARD_BOOTCONFIG += $(config)) \
+      $(eval BOARD_KERNEL_CMDLINE := $(filter-out bootconfig $(config),$(BOARD_KERNEL_CMDLINE)) bootconfig)))
 endif
 
-# QCOM
-ifeq ($(PRODUCT_USES_QCOM_HARDWARE),true)
-  include $(COMMON_PATH)/hardware/qcom/board.mk
-endif
-TARGET_USES_HARDWARE_QCOM_GPS := false
+# Modules
+## Check existance of modules for sanity
+$(foreach module,$(BOARD_VENDOR_KERNEL_MODULES) \
+ $(BOARD_VENDOR_RAMDISK_KERNEL_MODULES), \
+ $(if $(wildcard $(module)), ,$(warning $(module) not found)))
+
+# Partitions
+PARTITIONS := vendor product system_ext system vendor_dlkm
+$(foreach partition,$(PARTITIONS),\
+$(if $(findstring true,$(call has-partition,$(partition))), \
+  $(eval BOARD_$(call upper,$(partition))IMAGE_FILE_SYSTEM_TYPE ?= $(PARTITION_TYPE)) \
+  $(eval TARGET_COPY_OUT_$(call upper,$(partition)) := $(partition)) \
+))
+
+# Power
+SOONG_CONFIG_NAMESPACES += MOTO_COMMON_POWER
+SOONG_CONFIG_MOTO_COMMON_POWER := FB_IDLE_PATH
+SOONG_CONFIG_MOTO_COMMON_POWER_FB_IDLE_PATH ?= /sys/devices/platform/soc/5e00000.qcom,mdss_mdp/idle_state
 
 # Recovery
-BOARD_INCLUDE_RECOVERY_DTBO := true
 TARGET_NO_RECOVERY ?= false
 TARGET_RECOVERY_PIXEL_FORMAT := RGBX_8888
 
-## Configure recovery updater library
-ifeq ($(call device-has-characteristic,ufs),true)
-  ifeq ($(call is-kernel-greater-than-or-equal-to,5.4),true)
-    SOONG_CONFIG_NAMESPACES += ufsbsg
-    SOONG_CONFIG_ufsbsg := ufsframework
-    SOONG_CONFIG_ufsbsg_ufsframework := bsg
-  endif
-endif
-
-## Move recovery resources to vendor_boot
+## Move recovery resources to vendor_boot when theres no recovery partition
+# Also move GSI AVB keys
 ifeq ($(call has-partition,vendor_boot),true)
-  BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT := true
+  ifneq ($(call has-partition,recovery),true)
+    BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT := true
+  endif
+  BOARD_MOVE_GSI_AVB_KEYS_TO_VENDOR_BOOT := true
 endif
 
 # RIL
@@ -131,19 +147,34 @@ VENDOR_SECURITY_PATCH=$(PLATFORM_SECURITY_PATCH)
 include device/sony/sepolicy/sepolicy.mk
 BOARD_USE_ENFORCING_SELINUX ?= true
 BOARD_VENDOR_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/vendor
-
-# USB
-SOONG_CONFIG_NAMESPACES += MOTO_COMMON_USB MOTO_COMMON_POWER
-SOONG_CONFIG_MOTO_COMMON_USB := USB_CONTROLLER_NAME
-SOONG_CONFIG_MOTO_COMMON_USB_USB_CONTROLLER_NAME ?= 4e00000
-SOONG_CONFIG_MOTO_COMMON_POWER := FB_IDLE_PATH
-SOONG_CONFIG_MOTO_COMMON_POWER_FB_IDLE_PATH ?= /sys/devices/platform/soc/5e00000.qcom,mdss_mdp/idle_state
+ifeq ($(PRODUCT_USES_QCOM_HARDWARE),true)
+  BOARD_VENDOR_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/vendor_qcom
+endif
+ifeq ($(PRODUCT_USES_MTK_HARDWARE),true)
+  BOARD_VENDOR_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/vendor_mtk
+endif
 
 # VINTF
 DEVICE_MANIFEST_FILE += $(COMMON_PATH)/vintf/manifest.xml
+ifeq ($(TARGET_USES_AUDIO_V7_0),true)
+  DEVICE_MANIFEST_FILE += $(COMMON_PATH)/vintf/android.hardware.audio_v7.0.xml
+else
+  DEVICE_MANIFEST_FILE += $(COMMON_PATH)/vintf/android.hardware.audio_v6.0.xml
+endif
 ifneq ($(TARGET_USES_FINGERPRINT_V2_1),false)
   DEVICE_MANIFEST_FILE += $(COMMON_PATH)/vintf/android.hardware.biometrics.fingerprint_v2.1.xml
 endif
+ifeq ($(PRODUCT_USES_MTK_HARDWARE),true)
+  DEVICE_MANIFEST_FILE += $(COMMON_PATH)/vintf/manifest-mtk.xml
+  DEVICE_MANIFEST_FILE += $(COMMON_PATH)/vintf/tether_v1.1.xml
+else
+  DEVICE_MANIFEST_FILE += $(COMMON_PATH)/vintf/manifest-qcom.xml
+  DEVICE_MANIFEST_FILE += $(COMMON_PATH)/vintf/tether_v1.0.xml
+endif
+ifeq ($(TARGET_SUPPORTS_NFC),true)
+  DEVICE_MANIFEST_FILE += $(COMMON_PATH)/vintf/android.hardware.nfc_v1.2.xml
+endif
+
 ## Framework compatibility matrix: What the device(=vendor) expects of the framework(=system)
 DEVICE_FRAMEWORK_COMPATIBILITY_MATRIX_FILE += $(COMMON_PATH)/vintf/framework_compatibility_matrix.xml
 DEVICE_MATRIX_FILE += $(COMMON_PATH)/vintf/compatibility_matrix.xml

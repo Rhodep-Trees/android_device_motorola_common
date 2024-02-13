@@ -96,13 +96,27 @@ PRODUCT_PROPERTY_OVERRIDES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.fuse.passthrough.enable=true
 
+# Hardware
+ifeq ($(PRODUCT_USES_QCOM_HARDWARE),true)
+  PRODUCT_PROPERTY_OVERRIDES += \
+      ro.vendor.hardware=qcom
+else ifeq ($(PRODUCT_USES_MTK_HARDWARE),true)
+  PRODUCT_PROPERTY_OVERRIDES += \
+      ro.vendor.hardware=mtk
+else
+  $(warning Neither MTK nor QCOM hardware has been selected!)
+  PRODUCT_PROPERTY_OVERRIDES += \
+      ro.vendor.hardware=unknown
+endif
+
 # HFR
-ifeq ($(call device-has-characteristic, hfr),true)
-   PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
-        ro.surface_flinger.set_idle_timer_ms=80 \
-        ro.surface_flinger.set_display_power_timer_ms=1000 \
-        ro.surface_flinger.use_smart_90_for_video=true \
-        ro.surface_flinger.refresh_rate_switching=true
+ifeq ($(call device-has-characteristic,hfr),true)
+  PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
+      ro.surface_flinger.set_idle_timer_ms=250 \
+      ro.surface_flinger.set_touch_timer_ms=1000 \
+      ro.surface_flinger.set_display_power_timer_ms=1000 \
+      ro.surface_flinger.use_smart_90_for_video=true \
+      ro.surface_flinger.refresh_rate_switching=true
 endif
 
 # LMKd
@@ -117,6 +131,10 @@ PRODUCT_PROPERTY_OVERRIDES += \
     ro.lmk.upgrade_pressure=40 \
     ro.lmk.downgrade_pressure=60
 
+# Kernel
+PRODUCT_PROPERTY_OVERRIDES += \
+    ro.vendor.kernel_version=$(TARGET_KERNEL_VERSION)
+
 # Media
 PRODUCT_PRODUCT_PROPERTIES += \
     media.settings.xml=/vendor/etc/media_profiles_vendor.xml
@@ -124,6 +142,12 @@ PRODUCT_PRODUCT_PROPERTIES += \
 # One Handed-Mode
 PRODUCT_PRODUCT_OVERRIDES += \
     ro.support_one_handed_mode=true
+
+# Power HAL
+ifeq ($(PRODUCT_USES_MTK_HARDWARE),true)
+  PRODUCT_PROPERTY_OVERRIDES += \
+      vendor.powerhal.disp.idle_support=false
+endif
 
 # Priv-app permisisons
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -194,6 +218,15 @@ PRODUCT_PROPERTY_OVERRIDES += \
 # Stagefright
 PRODUCT_PROPERTY_OVERRIDES += \
     media.stagefright.thumbnail.prefer_hw_codecs=true
+
+# SurfaceFlinger
+PRODUCT_PROPERTY_OVERRIDES += \
+    ro.surface_flinger.enable_frame_rate_override=false
+
+# USB
+PRODUCT_PROPERTY_OVERRIDES += \
+    vendor.usb.contaminantdisable=true \
+    vendor.usb.signalingdisable=true
 
 # Disable Compressed APEX on 4.14 kernel as Android 12 enforces it and our kernel is not compatible (yet)
 ifeq ($(TARGET_KERNEL_VERSION), 4.14)

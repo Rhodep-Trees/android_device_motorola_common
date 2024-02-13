@@ -21,8 +21,6 @@ PRODUCT_PACKAGES += \
 
 # A/B
 PRODUCT_PACKAGES += \
-    bootctrl.$(TARGET_BOARD_PLATFORM) \
-    bootctrl.$(TARGET_BOARD_PLATFORM).recovery \
     otapreopt_script \
     update_engine \
     update_engine_client \
@@ -41,6 +39,10 @@ PRODUCT_PACKAGES += \
 # Audio
 PRODUCT_PACKAGES += \
     audio.bluetooth.default \
+    libalsautils \
+    libaudiofoundation.vendor \
+    libnbaio_mono \
+    libtinycompress \
     tinymix
 
 # Charger
@@ -116,30 +118,13 @@ PRODUCT_PACKAGES += \
     $(DEVICE)SettingsOverlay \
     $(DEVICE)SystemUIOverlay
 
-# QCOM Data
+# Power
 PRODUCT_PACKAGES += \
-    librmnetctl
-
-ifeq ($(call device-has-characteristic,fm),true)
-  # FM
-  PRODUCT_PACKAGES += \
-      FM2 \
-      libfm-hci \
-      libqcomfm_jni \
-      fm_helium \
-      qcom.fmradio
-endif
+    libpower.vendor
 
 # RIL
 PRODUCT_PACKAGES += \
     ims-moto-libs \
     libjson \
     libprotobuf-cpp-full \
-    libqsap_sdk \
-    libsensorndkbridge \
-    qti-telephony-hidl-wrapper \
-    qti-telephony-hidl-wrapper-prd \
-    qti_telephony_hidl_wrapper.xml \
-    qti_telephony_hidl_wrapper_prd.xml \
-    qti-telephony-utils \
-    qti_telephony_utils.xml
+    libsensorndkbridge

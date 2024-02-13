@@ -19,7 +19,6 @@ COMMON_PATH := device/motorola/common
 AB_OTA_POSTINSTALL_CONFIG ?= \
     RUN_POSTINSTALL_system=true \
     POSTINSTALL_PATH_system=system/bin/otapreopt_script \
-    FILESYSTEM_TYPE_system=ext4 \
     POSTINSTALL_OPTIONAL_system=true
 
 # Arch
@@ -69,31 +68,64 @@ PRODUCT_PACKAGES += \
 # FSTab Handling
 ## Define suffix for fstab
 ifeq ($(PRODUCT_USES_QCOM_HARDWARE),true) # QCOM uses qcom
- FSTAB_SUFFIX := qcom
+  FSTAB_SUFFIX := qcom
 else ifeq ($(PRODUCT_USES_MTK_HARDWARE),true) # MTK uses board platform
- FSTAB_SUFFIX := $(TARGET_BOARD_PLAFORM)
+  FSTAB_SUFFIX := $(TARGET_BOARD_PLATFORM)
 endif
 
-## Select fstab path based on vendor_boot's existence.
-## Always copy fstab to vendor.
+## Select fstab path based on vendor_boot and recovery's existence
+fstab_path := $(PLATFORM_COMMON_PATH)/rootdir/$(call select-fstab)
 ifeq ($(call has-partition,vendor_boot),false)
-  PRODUCT_COPY_FILES += \
-      $(PLATFORM_COMMON_PATH)/rootdir/$(call select-fstab):$(TARGET_COPY_OUT_RAMDISK)/fstab.$(FSTAB_SUFFIX)
+  ifeq ($(AB_OTA_UPDATER),true)
+    ifeq ($(call has-partition,recovery),true)
+      PRODUCT_COPY_FILES += \
+          $(fstab_path):$(TARGET_COPY_OUT_RAMDISK)/fstab.$(FSTAB_SUFFIX)
+    else
+      PRODUCT_COPY_FILES += \
+          $(fstab_path):$(TARGET_COPY_OUT_RECOVERY)/root/first_stage_ramdisk/fstab.$(FSTAB_SUFFIX)
+    endif
+  endif
 else
   PRODUCT_COPY_FILES += \
-      $(PLATFORM_COMMON_PATH)/rootdir/$(call select-fstab):$(TARGET_COPY_OUT_VENDOR_RAMDISK)/first_stage_ramdisk/fstab.$(FSTAB_SUFFIX)
+      $(fstab_path):$(TARGET_COPY_OUT_VENDOR_RAMDISK)/first_stage_ramdisk/fstab.$(FSTAB_SUFFIX)
 endif
+## Always copy fstab to vendor
 PRODUCT_COPY_FILES += \
-    $(PLATFORM_COMMON_PATH)/rootdir/$(call select-fstab):$(TARGET_COPY_OUT_VENDOR)/etc/fstab.$(FSTAB_SUFFIX)
+    $(fstab_path):$(TARGET_COPY_OUT_VENDOR)/etc/fstab.$(FSTAB_SUFFIX)
 
-# Kernel
-PRODUCT_VENDOR_KERNEL_HEADERS := $(PLATFORM_COMMON_PATH)-kernel/kernel-headers
+## Sanity check fstab to prevent boot issues
+## First check the expected partition type
+ifeq ($(call device-has-characteristic,erofs),true)
+  PARTITION_TYPE := erofs
+else
+  PARTITION_TYPE := ext4
+endif
+## Then check the fstab actually exists...
+ifeq (,$(wildcard $(fstab_path)))
+  $(error $(fstab_path) does not exist!)
+endif
+## Check the contents for just /vendor,
+## its unlikely fstab will just have /vendor
+## as the expected partition type not the others
+fstab_contents := $(strip $(shell cat $(fstab_path)))
+ifeq (,$(findstring /vendor $(PARTITION_TYPE),$(fstab_contents)))
+  $(error $(PARTITION_TYPE) not defined in fstab!)
+endif
+## Now that we know the partition type, let's add
+## it to AB_OTA_POSTINSTALL_CONFIG
+AB_OTA_POSTINSTALL_CONFIG += \
+    FILESYSTEM_TYPE_system=$(PARTITION_TYPE)
 
 # Media codecs configuration
 PRODUCT_COPY_FILES += \
     frameworks/av/media/libstagefright/data/media_codecs_google_audio.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_audio.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_telephony.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_telephony.xml \
     frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_google_video.xml
+
+# Mediatek
+ifeq ($(PRODUCT_USES_MTK_HARDWARE),true)
+  include $(COMMON_PATH)/hardware/mediatek/product.mk
+endif
 
 # NFC
 ifneq (,$(filter $(TARGET_USES_SN1XX_NFC) $(TARGET_USES_PN5XX_PN8X_NFC) $(TARGET_USES_ST_NFC) $(TARGET_USES_SEC_NFC), true))
@@ -106,7 +138,7 @@ ifeq ($(PRODUCT_USES_QCOM_HARDWARE),true)
 endif
 
 # Recovery
-TARGET_RECOVERY_FSTAB := $(PLATFORM_COMMON_PATH)/rootdir/$(call select-fstab)
+TARGET_RECOVERY_FSTAB := $(fstab_path)
 
 # Rootdir
 $(call copy-files-recursive,$(COMMON_PATH)/rootdir/vendor,$(TARGET_COPY_OUT_VENDOR))
@@ -114,18 +146,15 @@ $(call copy-files-recursive,$(DEVICE_PATH)/vendor,$(TARGET_COPY_OUT_VENDOR))
 $(call copy-files-recursive,$(PLATFORM_COMMON_PATH)/rootdir/vendor,$(TARGET_COPY_OUT_VENDOR))
 
 # SKUs
+## With NFC
 $(call add-device-sku,n,nfc)
+## Default Without NFC
+$(call add-device-sku-inner,d)
 
 # Soong
 PRODUCT_SOONG_NAMESPACES += \
     $(COMMON_PATH) \
-    $(PLATFORM_COMMON_PATH) \
-    vendor/qcom/opensource/audio/$(qcom_platform) \
-    vendor/qcom/opensource/data-ipa-cfg-mgr-legacy-um \
-    vendor/qcom/opensource/dataservices \
-    vendor/qcom/opensource/display/$(qcom_platform) \
-    vendor/qcom/opensource/display-commonsys-intf \
-    vendor/qcom/opensource/gps-legacy
+    $(PLATFORM_COMMON_PATH)
 
 ## Enable pixel soong namespace for Pixel USB and Power HAL
 PRODUCT_SOONG_NAMESPACES += \
@@ -140,4 +169,3 @@ $(call inherit-product, device/motorola/common/common-packages.mk)
 $(call inherit-product, device/motorola/common/common-perm.mk)
 $(call inherit-product, device/motorola/common/common-prop.mk)
 $(call inherit-product, device/motorola/common/common-treble.mk)
-$(call inherit-product, vendor/motorola/common/common-vendor.mk)

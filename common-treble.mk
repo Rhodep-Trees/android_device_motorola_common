@@ -14,35 +14,31 @@
 
 # Audio
 PRODUCT_PACKAGES += \
-    android.hardware.audio@6.0-impl:32 \
+    android.hardware.audio.common@7.0.vendor \
+    android.hardware.audio.effect@7.0.vendor \
+    android.hardware.audio.common@7.0-util.vendor \
+    android.hardware.audio@6.0-impl \
+    android.hardware.audio@7.0-impl \
+    android.hardware.audio@7.0.vendor \
     android.hardware.audio.service \
-    android.hardware.audio.effect@6.0-impl:32 \
+    android.hardware.audio.effect@6.0-impl \
+    android.hardware.audio.effect@7.0-impl \
     android.hardware.bluetooth@1.0.vendor \
+    android.hardware.bluetooth@1.1.vendor \
     android.hardware.bluetooth.audio-impl \
     android.hardware.soundtrigger@2.1.vendor \
     android.hardware.soundtrigger@2.2.vendor \
     android.hardware.soundtrigger@2.3.vendor \
-    android.hardware.soundtrigger@2.3-impl \
-    com.dsi.ant@1.0.vendor \
-    com.qualcomm.qti.bluetooth_audio@1.0.vendor \
-    vendor.qti.hardware.btconfigstore@1.0.vendor \
-    vendor.qti.hardware.btconfigstore@2.0.vendor
+    android.hardware.soundtrigger@2.3-impl
 
 # Camera
 PRODUCT_PACKAGES += \
-    android.hardware.camera.provider@2.5 \
+    android.hardware.camera.device@3.5.vendor \
+    android.hardware.camera.device@3.6.vendor \
+    android.hardware.camera.provider@2.5.vendor \
+    android.hardware.camera.provider@2.6.vendor \
     android.frameworks.displayservice@1.0.vendor \
-    android.frameworks.sensorservice@1.0.vendor \
-    vendor.qti.hardware.camera.postproc@1.0.vendor
-ifeq ($(TARGET_USES_64BIT_CAMERA),true)
-  PRODUCT_PACKAGES += \
-      android.hardware.camera.provider@2.4-impl:64 \
-      android.hardware.camera.provider@2.4-service_64
-else
-  PRODUCT_PACKAGES += \
-      android.hardware.camera.provider@2.4-impl:32 \
-      android.hardware.camera.provider@2.4-service
-endif
+    android.frameworks.sensorservice@1.0.vendor
 
 # Configstore
 PRODUCT_PACKAGES += \
@@ -61,11 +57,6 @@ PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1.vendor \
     com.motorola.hardware.biometric.fingerprint@1.0.vendor \
     vendor.egistec.hardware.fingerprint@4.0.vendor
-
-# FM
-PRODUCT_PACKAGES += \
-    vendor.qti.hardware.fm@1.0 \
-    vendor.qti.hardware.fm@1.0.vendor
 
 # GNSS
 PRODUCT_PACKAGES += \
@@ -86,11 +77,6 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.lights-service.moto
 
-# Linked by Adreno/EGL blobs for fallback if 3.0 doesn't exist
-PRODUCT_PACKAGES += \
-    vendor.qti.hardware.display.allocator@3.0.vendor \
-    vendor.qti.hardware.display.mapper@2.0.vendor
-
 # Netmgrd
 PRODUCT_PACKAGES += \
     android.system.net.netd@1.1.vendor
@@ -103,47 +89,34 @@ ifeq ($(call device-has-characteristic,nfc),true)
 endif
 
 ## Specific Chips
-ifeq ($(TARGET_USES_PN5XX_PN8X_NFC),true)
+ifeq ($(TARGET_USES_NXP_NFC),true)
   PRODUCT_PACKAGES += \
-      android.hardware.nfc@1.2-service
+      android.hardware.nfc-service.nxp
 endif
 ifeq ($(TARGET_USES_SEC_NFC),true)
   PRODUCT_PACKAGES += \
       android.hardware.nfc@1.2-service.samsung \
       nfc_nci_samsung
 endif
-ifeq ($(TARGET_USES_SN1XX_NFC),true)
-  PRODUCT_PACKAGES += \
-      android.hardware.nfc_snxxx@1.2-service
-endif
 ifeq ($(TARGET_USES_ST_NFC),true)
   PRODUCT_PACKAGES += \
-      android.hardware.nfc@1.2-service.st \
-      nfc_nci.st21nfc.default
-endif
-
-# Only define bootctrl HAL availability on AB platforms:
-ifeq ($(AB_OTA_UPDATER),true)
-  PRODUCT_PACKAGES += \
-      android.hardware.boot@1.1-impl-qti \
-      android.hardware.boot@1.1-impl-qti.recovery \
-      android.hardware.boot@1.1-service
+      android.hardware.nfc-service.st
 endif
 
 # Power
 PRODUCT_PACKAGES += \
     android.hardware.power@1.0.vendor \
     android.hardware.power@1.1.vendor \
-    android.hardware.power@1.2.vendor
+    android.hardware.power@1.2.vendor \
+    pixel-power-ext-V1-ndk.vendor
 
-ifeq ($(PRODUCT_USES_PIXEL_POWER_HAL),true)
+ifneq ($(TARGET_USES_PP_HAL),false)
   PRODUCT_PACKAGES += \
       android.hardware.power-service.moto-common-libperfmgr
-else
-  $(call inherit-product, vendor/qcom/opensource/power/power-vendor-product.mk)
 endif
 
 # QTI Haptics Vibrator
+## Used on MTK and QCOM for now
 PRODUCT_PACKAGES += \
     vendor.qti.hardware.vibrator.service
 
@@ -162,19 +135,26 @@ PRODUCT_PACKAGES += \
 
 # Sensors
 PRODUCT_PACKAGES += \
-    android.hardware.sensors@2.0-service.multihal
+    android.hardware.sensors@2.0.vendor
+
+ifneq ($(PRODUCT_USES_MTK_HARDWARE),true)
+  PRODUCT_PACKAGES += \
+      android.hardware.sensors@2.0-service.multihal
+endif
 
 # Thermal HAL
-PRODUCT_SOONG_NAMESPACES += \
-    vendor/qcom/opensource/thermal
-
 PRODUCT_PACKAGES += \
-    android.hardware.thermal@2.0-service.qti
+    android.hardware.thermal@1.0.vendor \
+    android.hardware.thermal@2.0.vendor
 
 # USB HAL
 PRODUCT_PACKAGES += \
-    android.hardware.usb@1.3-service.moto-common
+    android.hardware.usb.gadget-service.moto-common \
+    android.hardware.usb-service.moto-common
 
 # WiFi
 PRODUCT_PACKAGES += \
-    android.hardware.wifi.hostapd@1.0.vendor
+    android.hardware.wifi.hostapd@1.0.vendor \
+    android.hardware.wifi@1.0-service-lazy \
+    wpa_supplicant \
+    hostapd
