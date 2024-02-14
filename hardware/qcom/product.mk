@@ -1,5 +1,7 @@
 # QCOM Platform selector
-ifeq ($(TARGET_KERNEL_VERSION), 5.4)
+ifeq ($(TARGET_KERNEL_VERSION), 5.10)
+  qcom_platform := sm8450
+else ifeq ($(TARGET_KERNEL_VERSION), 5.4)
   qcom_platform := sm8350
 else ifeq ($(TARGET_KERNEL_VERSION), 4.19)
   qcom_platform := sm8250
@@ -31,14 +33,17 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     vendor.qti.hardware.camera.postproc@1.0.vendor
 
-ifeq ($(TARGET_USES_64BIT_CAMERA),true)
-  PRODUCT_PACKAGES += \
-      android.hardware.camera.provider@2.4-impl:64 \
-      android.hardware.camera.provider@2.4-service_64
-else
-  PRODUCT_PACKAGES += \
-      android.hardware.camera.provider@2.4-impl:32 \
-      android.hardware.camera.provider@2.4-service
+ifneq ($(call is-kernel-greater-than-or-equal-to,5.10),true)
+  ifeq ($(TARGET_USES_64BIT_CAMERA),true)
+    PRODUCT_PACKAGES += \
+        android.hardware.camera.provider@2.4-impl:64 \
+        android.hardware.camera.provider@2.4-service_64
+  else
+    PRODUCT_PACKAGES += \
+        android.hardware.camera.provider@2.4-impl:32 \
+        android.hardware.camera.provider@2.4-service
+  endif
+  TARGET_USES_CAMERA_V2_4 := true
 endif
 
 # Components
@@ -58,6 +63,8 @@ TARGET_COMMON_QTI_COMPONENTS := \
     qseecomd \
     vibrator \
     wlan
+## Filter out unwanted components
+TARGET_COMMON_QTI_COMPONENTS := $(filter-out $(TARGET_UNWANTED_QTI_COMPONENTS),$(TARGET_COMMON_QTI_COMPONENTS))
 
 # Dataservices
 $(call soong_config_set,rmnetctl,old_rmnet_data,true)
@@ -68,7 +75,6 @@ $(call inherit-product-if-exists, vendor/qcom/opensource/display-commonsys-intf/
 
 # FM
 ifeq ($(call device-has-characteristic,fm),true)
-  # FM
   PRODUCT_PACKAGES += \
       FM2 \
       libfm-hci \
@@ -83,7 +89,22 @@ PRODUCT_PACKAGES += \
     vendor.qti.hardware.fm@1.0.vendor
 
 # GPS
-$(call inherit-product-if-exists, vendor/qcom/opensource/gps-legacy/gps_vendor_product.mk)
+TARGET_USES_$(call upper,$(qcom_platform))_GPS := true
+ifeq ($(call is-kernel-less-than-or-equal-to,5.4),true)
+  PRODUCT_SOONG_NAMESPACES += vendor/qcom/opensource/gps/legacy
+  $(call inherit-product-if-exists, vendor/qcom/opensource/gps/legacy/gps_vendor_product.mk)
+  TARGET_USES_OLD_GPS := true
+else
+  PRODUCT_SOONG_NAMESPACES += vendor/qcom/opensource/gps/$(qcom_platform)
+  $(call inherit-product-if-exists, vendor/qcom/opensource/gps/$(qcom_platform)/gps_vendor_product.mk)
+endif
+
+# Kernel
+TARGET_USES_KERNEL_PLATFORM := false
+
+# Keymaster
+PRODUCT_PACKAGES += \
+    libkeymaster_messages.vendor
 
 # Linked by Adreno/EGL blobs for fallback if 3.0 doesn't exist
 PRODUCT_PACKAGES += \
@@ -117,7 +138,8 @@ PRODUCT_PACKAGES += \
     libvndfwk_detect_jni.qti \
     libqti_vndfwk_detect \
     libvndfwk_detect_jni.qti.vendor \
-    libqti_vndfwk_detect.vendor
+    libqti_vndfwk_detect.vendor \
+    libqti_vndfwk_detect_vendor
 
 # RIL
 PRODUCT_PACKAGES += \
@@ -135,8 +157,7 @@ PRODUCT_SOONG_NAMESPACES += \
     vendor/qcom/opensource/data-ipa-cfg-mgr-legacy-um \
     vendor/qcom/opensource/dataservices \
     vendor/qcom/opensource/display/$(qcom_platform) \
-    vendor/qcom/opensource/display-commonsys-intf \
-    vendor/qcom/opensource/gps-legacy
+    vendor/qcom/opensource/display-commonsys-intf
 
 # Telephony: IMS framework
 PRODUCT_COPY_FILES += \
@@ -155,3 +176,8 @@ PRODUCT_COPY_FILES += \
 
 # Vendor
 $(call inherit-product, vendor/motorola/common/hardware/qcom/qcom-vendor.mk)
+
+# VINTF
+ifeq ($(call is-kernel-greater-than-or-equal-to,5.10),true)
+  TARGET_USES_TETHER_V1_1 := true
+endif
